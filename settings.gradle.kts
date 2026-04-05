@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ui+data"
+rootProject.name = "ValentineGarage"
 include(":app")
- 
+include(":app")

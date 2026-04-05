@@ -5,6 +5,8 @@
     <string name="log_in">Log In</string>
     <string name="username">Username</string>
     <string name="password">Password</string>
+    <string name="email">Email</string>
+    <string name="email_placeholder">example@mail.com</string>
     <string name="username_placeholder">lanlordjones</string>
     <string name="password_placeholder">••••••</string>
     <string name="forgot_password">Forgot Password?</string>

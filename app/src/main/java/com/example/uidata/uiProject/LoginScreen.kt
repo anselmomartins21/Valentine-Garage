@@ -28,6 +28,7 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit = {},
     onBack: () -> Unit = {}
 ) {
+    var email by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
@@ -91,6 +92,36 @@ fun LoginScreen(
                     .padding(horizontal = 24.dp)
             ) {
                 Spacer(modifier = Modifier.height(32.dp))
+
+                Text(
+                    text = stringResource(id = R.string.email),
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 16.sp,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text(
+                            text = stringResource(id = R.string.email_placeholder),
+                            color = Color.LightGray.copy(alpha = 0.7f)
+                        )
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
+                        focusedBorderColor = Color(0xFF67AFE1),
+                        unfocusedContainerColor = Color.Black.copy(alpha = 0.4f),
+                        focusedContainerColor = Color.Black.copy(alpha = 0.4f),
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
                     text = stringResource(id = R.string.username),

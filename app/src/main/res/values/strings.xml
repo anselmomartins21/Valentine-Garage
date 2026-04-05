@@ -1,3 +1,21 @@
 <resources>
     <string name="app_name">ui+data</string>
+    <string name="car_scan">CarScan</string>
+    <string name="welcome">Welcome to Valentine\'s Garage!</string>
+    <string name="log_in">Log In</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="username_placeholder">lanlordjones</string>
+    <string name="password_placeholder">••••••</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="menu">Menu</string>
+    <string name="generate_qr_code">Generate QR Code</string>
+    <string name="scan_qr_code">Scan QR Code</string>
+    <string name="settings">Settings</string>
+    <string name="check_progress">Check Progress</string>
+    <string name="change_oil_filter">Change oil filter</string>
+    <string name="check_tire_pressure">Check tire pressure</string>
+    <string name="replace_brake_pads">Replace brake pads</string>
+    <string name="refill_coolant">Refill coolant</string>
+    <string name="service_tasks">Service Tasks</string>
 </resources>

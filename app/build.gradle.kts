@@ -40,6 +40,9 @@ android {
 }
 
 dependencies {
+    implementation("io.github.jan-tennert.supabase:supabase-kt:3.2.2")
+    implementation("io.github.jan-tennert.supabase:postgrest-kt:3.2.2")
+    implementation("io.ktor:ktor-client-android:3.2.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "633650142638",
+    "project_id": "valentinegarage-6f076",
+    "storage_bucket": "valentinegarage-6f076.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:633650142638:android:f9e340b97e40efd90e3c3f",
+        "android_client_info": {
+          "package_name": "com.valentinegarage"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFFYGhOaDrwgsQcJXgxW7-pdBC3qDouRI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

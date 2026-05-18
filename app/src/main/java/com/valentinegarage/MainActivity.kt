@@ -3,45 +3,24 @@ package com.valentinegarage
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.valentinegarage.ui.theme.ValentineGarageTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import com.valentinegarage.ui.checkin.CheckInScreen
 
+// MainActivity is the ENTRY POINT of the app
+// When you open the app, this is the first thing that runs
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        // setContent tells Android what to show on screen
+        // We show our CheckInScreen here
         setContent {
-            ValentineGarageTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
+            MaterialTheme {
+                Surface {
+                    CheckInScreen()
                 }
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    ValentineGarageTheme {
-        Greeting("Android")
     }
 }

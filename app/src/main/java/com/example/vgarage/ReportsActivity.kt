@@ -23,10 +23,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 class ReportsActivity : ComponentActivity() {
+
+    // Shared state so onResume can trigger a recompose-driven refresh
+    private val refreshTrigger = mutableIntStateOf(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             ReportsScreen(
+                refreshTrigger = refreshTrigger.intValue,
                 onBack = { finish() },
                 onLogout = {
                     CurrentUser.clear()
@@ -37,36 +42,71 @@ class ReportsActivity : ComponentActivity() {
             )
         }
     }
+
+    /** Refresh data every time admin returns to this screen */
+    override fun onResume() {
+        super.onResume()
+        refreshTrigger.intValue++
+    }
 }
 
 @Composable
-fun ReportsScreen(onBack: () -> Unit = {}, onLogout: () -> Unit = {}) {
+fun ReportsScreen(
+    refreshTrigger: Int       = 0,
+    onBack:         () -> Unit = {},
+    onLogout:       () -> Unit = {}
+) {
     var trucks  by remember { mutableStateOf<List<Truck>>(emptyList()) }
     var tasks   by remember { mutableStateOf<List<Task>>(emptyList()) }
     var users   by remember { mutableStateOf<List<User>>(emptyList()) }
-    var stats   by remember { mutableStateOf(FleetStats(0,0,0,0)) }
+    var stats   by remember { mutableStateOf(FleetStats(0, 0, 0, 0)) }
     var loading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) {
-        trucks = GarageRepository.getAllTrucks()
-        tasks  = GarageRepository.getAllTasks()
-        users  = GarageRepository.getAllUsers()
-        stats  = GarageRepository.getFleetStats()
+    // Re-fetches on every onResume (refreshTrigger change)
+    LaunchedEffect(refreshTrigger) {
+        loading = true
+        // Fetch all data in a single pass
+        trucks  = GarageRepository.getAllTrucks()
+        tasks   = GarageRepository.getAllTasks()
+        users   = GarageRepository.getAllUsers()
+        // Compute stats from the data we just fetched (no extra DB round-trips)
+        stats = FleetStats(
+            total = trucks.size,
+            inRepair = trucks.count { truck ->
+                tasks.filter { it.truckId == truck.id }.any { it.status == "pending" }
+            },
+            completed = trucks.count { truck ->
+                val tt = tasks.filter { it.truckId == truck.id }
+                tt.isNotEmpty() && tt.all { it.status == "completed" }
+            },
+            needsAttention = trucks.count {
+                it.condition == "Poor" || it.condition == "Critical"
+            }
+        )
         loading = false
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF0F172A)).statusBarsPadding().navigationBarsPadding()) {
-        // Top bar
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0F172A))
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        // ── Top bar ───────────────────────────────────────────────────────────
         Row(
-            modifier = Modifier.fillMaxWidth().background(Color(0xFF1E293B))
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF1E293B))
                 .padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment     = Alignment.CenterVertically
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) {
                     TextButton(onClick = onBack) {
-                        Text("← Back", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text("← Back", color = Color.White,
+                            fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     }
                 }
                 Column(Modifier.padding(start = 4.dp)) {
@@ -94,21 +134,24 @@ fun ReportsScreen(onBack: () -> Unit = {}, onLogout: () -> Unit = {}) {
 
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding      = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Fleet stats row
+            // ── Summary boxes ─────────────────────────────────────────────────
             item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MiniStat("TOTAL", stats.total.toString(), Color(0xFF94A3B8), Modifier.weight(1f))
-                    MiniStat("IN REPAIR", stats.inRepair.toString(), Color(0xFFF97318), Modifier.weight(1f))
-                    MiniStat("DONE", stats.completed.toString(), Color(0xFF22C55E), Modifier.weight(1f))
-                    MiniStat("URGENT", stats.needsAttention.toString(), Color(0xFFEF4444), Modifier.weight(1f))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MiniStat("TOTAL",     stats.total.toString(),         Color(0xFF94A3B8), Modifier.weight(1f))
+                    MiniStat("IN REPAIR", stats.inRepair.toString(),      Color(0xFFF97318), Modifier.weight(1f))
+                    MiniStat("DONE",      stats.completed.toString(),     Color(0xFF22C55E), Modifier.weight(1f))
+                    MiniStat("URGENT",    stats.needsAttention.toString(), Color(0xFFEF4444), Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(6.dp))
             }
 
-            // Active repairs
+            // ── Active repairs ────────────────────────────────────────────────
             item {
                 SectionHeader("ACTIVE REPAIRS", "Trucks currently in service")
             }
@@ -116,40 +159,47 @@ fun ReportsScreen(onBack: () -> Unit = {}, onLogout: () -> Unit = {}) {
             val inRepairTrucks = trucks.filter { truck ->
                 tasks.filter { it.truckId == truck.id }.any { it.status == "pending" }
             }
+
             if (inRepairTrucks.isEmpty()) {
                 item {
-                    Text("No trucks currently in repair",
-                        color = Color(0xFF64748B), fontSize = 13.sp,
-                        modifier = Modifier.padding(vertical = 8.dp))
+                    Text(
+                        "No trucks currently in repair",
+                        color    = Color(0xFF64748B),
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
                 }
             } else {
                 items(inRepairTrucks) { truck ->
                     val truckTasks = tasks.filter { it.truckId == truck.id }
-                    val done  = truckTasks.count { it.status == "completed" }
-                    val total = truckTasks.size
+                    val done   = truckTasks.count { it.status == "completed" }
+                    val total  = truckTasks.size
                     val allDone = total > 0 && done == total
                     ActiveRepairCard(truck, done, total, allDone)
                 }
             }
 
-            // Mechanic activity log
+            // ── Mechanic activity ─────────────────────────────────────────────
             item {
                 Spacer(Modifier.height(6.dp))
                 SectionHeader("MECHANIC ACTIVITY", "Tasks completed by each mechanic")
             }
 
             val mechanics = users.filter { it.role == "mechanic" }
+
             if (mechanics.isEmpty()) {
                 item {
-                    Text("No mechanic data available",
-                        color = Color(0xFF64748B), fontSize = 13.sp)
+                    Text(
+                        "No mechanic data available",
+                        color    = Color(0xFF64748B),
+                        fontSize = 13.sp
+                    )
                 }
             } else {
                 items(mechanics) { mechanic ->
                     val myTasks = tasks.filter { it.mechanicId == mechanic.id }
                     val done    = myTasks.count { it.status == "completed" }
-                    val total   = myTasks.size
-                    MechanicActivityCard(mechanic, myTasks, trucks, done, total)
+                    MechanicActivityCard(mechanic, myTasks, trucks, done, myTasks.size)
                 }
             }
 
@@ -160,12 +210,17 @@ fun ReportsScreen(onBack: () -> Unit = {}, onLogout: () -> Unit = {}) {
 
 @Composable
 fun MiniStat(label: String, value: String, color: Color, modifier: Modifier) {
-    Card(modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-        shape = RoundedCornerShape(8.dp)) {
-        Column(Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Card(
+        modifier = modifier,
+        colors   = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+        shape    = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            Modifier.padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(value, color = color, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text(label, color = Color(0xFF64748B), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text(label,  color = Color(0xFF64748B), fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -173,7 +228,7 @@ fun MiniStat(label: String, value: String, color: Color, modifier: Modifier) {
 @Composable
 fun SectionHeader(title: String, subtitle: String) {
     Column {
-        Text(title, color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(title,    color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Text(subtitle, color = Color(0xFF475569), fontSize = 12.sp)
         Spacer(Modifier.height(8.dp))
     }
@@ -186,20 +241,27 @@ fun ActiveRepairCard(truck: Truck, done: Int, total: Int, allDone: Boolean) {
     val statusBg    = if (allDone) Color(0xFF0D2818) else Color(0xFF2A1400)
     val progress    = if (total > 0) done.toFloat() / total else 0f
 
-    Card(Modifier.fillMaxWidth(),
+    Card(
+        Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
         border = BorderStroke(1.dp, if (allDone) Color(0xFF22C55E) else Color(0xFF334155)),
-        shape  = RoundedCornerShape(8.dp)) {
+        shape  = RoundedCornerShape(8.dp)
+    ) {
         Column(Modifier.padding(14.dp)) {
-            Row(Modifier.fillMaxWidth(),
+            Row(
+                Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
                 Column {
                     Text(truck.plateNumber,
                         color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
-                Box(Modifier.background(statusBg, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)) {
+                Box(
+                    Modifier
+                        .background(statusBg, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
                     Text(statusText, color = statusColor,
                         fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
@@ -213,18 +275,21 @@ fun ActiveRepairCard(truck: Truck, done: Int, total: Int, allDone: Boolean) {
                     color = Color(0xFF64748B), fontSize = 12.sp)
             }
             Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
                 Text("$done / $total tasks done",
                     color = Color(0xFF64748B), fontSize = 11.sp)
-                Text("${(progress*100).toInt()}%",
+                Text("${(progress * 100).toInt()}%",
                     color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(4.dp))
             LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(4.dp),
-                color = statusColor, trackColor = Color(0xFF334155)
+                progress   = { progress },
+                modifier   = Modifier.fillMaxWidth().height(4.dp),
+                color      = statusColor,
+                trackColor = Color(0xFF334155)
             )
         }
     }
@@ -232,20 +297,27 @@ fun ActiveRepairCard(truck: Truck, done: Int, total: Int, allDone: Boolean) {
 
 @Composable
 fun MechanicActivityCard(
-    mechanic: User, myTasks: List<Task>,
-    allTrucks: List<Truck>, done: Int, total: Int
+    mechanic:  User,
+    myTasks:   List<Task>,
+    allTrucks: List<Truck>,
+    done:      Int,
+    total:     Int
 ) {
-    val progress  = if (total > 0) done.toFloat() / total else 0f
-    val allDone = progress >= 1f
+    val progress = if (total > 0) done.toFloat() / total else 0f
+    val allDone  = total > 0 && done == total
     val completed = myTasks.filter { it.status == "completed" }
 
-    Card(Modifier.fillMaxWidth(),
+    Card(
+        Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-        shape  = RoundedCornerShape(8.dp)) {
+        shape  = RoundedCornerShape(8.dp)
+    ) {
         Column(Modifier.padding(14.dp)) {
-            Row(Modifier.fillMaxWidth(),
+            Row(
+                Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
                 Text(mechanic.name,
                     color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text("$done / $total tasks",
@@ -253,15 +325,18 @@ fun MechanicActivityCard(
             }
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(6.dp),
-                color = if (allDone) Color(0xFF22C55E) else Color(0xFFF97318),
+                progress   = { progress },
+                modifier   = Modifier.fillMaxWidth().height(6.dp),
+                color      = if (allDone) Color(0xFF22C55E) else Color(0xFFF97318),
                 trackColor = Color(0xFF334155)
             )
             Spacer(Modifier.height(4.dp))
-            Text(if (allDone) "All done ✓" else "${(progress*100).toInt()}% done  ·  ${total-done} remaining",
-                color = if (allDone) Color(0xFF22C55E) else Color(0xFF64748B),
-                fontSize = 12.sp)
+            Text(
+                if (allDone) "All done ✓"
+                else "${(progress * 100).toInt()}% done  ·  ${total - done} remaining",
+                color    = if (allDone) Color(0xFF22C55E) else Color(0xFF64748B),
+                fontSize = 12.sp
+            )
 
             // Completed task log
             if (completed.isNotEmpty()) {
@@ -273,7 +348,11 @@ fun MechanicActivityCard(
                 Spacer(Modifier.height(6.dp))
                 completed.forEach { task ->
                     val truck = allTrucks.find { it.id == task.truckId }
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
                         Text("✓ ", color = Color(0xFF22C55E), fontSize = 13.sp)
                         Column {
                             Text(task.description,
@@ -284,7 +363,8 @@ fun MechanicActivityCard(
                             }
                             if (task.notes.isNotEmpty()) {
                                 Text("Notes: ${task.notes}",
-                                    color = Color(0xFF64748B), fontSize = 11.sp,
+                                    color     = Color(0xFF64748B),
+                                    fontSize  = 11.sp,
                                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
                             }
                         }
@@ -299,26 +379,28 @@ fun MechanicActivityCard(
 @Composable
 fun ReportsPreview() {
     val trucks = listOf(
-        Truck("1","N 12345 W","Good",45200,"","","Oil Issues","Noise from engine"),
-        Truck("2","N 98760 W","Poor",112000,"","","Body Dents or Scratches",""),
+        Truck("1", "N 12345 W", "Good",  45200,  "", "", "Engine/Oil Issues",   "Noise from engine"),
+        Truck("2", "N 98760 W", "Poor",  112000, "", "", "Body Dents or Scratches", ""),
     )
     val tasks = listOf(
-        Task("1","1","m1","Oil Change","completed","Changed 5W-30 oil"),
-        Task("2","1","m1","Brake Inspection","completed","Pads OK"),
-        Task("3","1","m1","Tyre Check","pending",""),
-        Task("4","2","m2","Oil Change","completed","Done"),
-        Task("5","2","m2","Engine Diagnostics","pending",""),
+        Task("1", "1", "m1", "Engine/Oil Issues",       "completed", "Changed oil"),
+        Task("2", "1", "m1", "Brake Problems",           "completed", "Pads replaced"),
+        Task("3", "1", "m1", "Tire Tread/Sidewall Damage", "pending", ""),
+        Task("4", "2", "m2", "Body Dents or Scratches",  "completed", "Dents fixed"),
+        Task("5", "2", "m2", "Exterior Lighting Faults", "pending",   ""),
     )
     val users = listOf(
-        User("m1","John Doe","john@vgarage.com","mechanic","1111"),
-        User("m2","Maria Doe","maria@vgarage.com","mechanic","2222")
+        User("m1", "John Doe",   "john@vgarage.com",  "mechanic", "1111"),
+        User("m2", "Maria Doe",  "maria@vgarage.com", "mechanic", "2222")
     )
-    val stats = FleetStats(2,2,0,1)
+    val fStats = FleetStats(2, 2, 0, 1)
+
     Column(Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
-        Row(Modifier.fillMaxWidth().background(Color(0xFF1E293B))
-            .padding(16.dp),
+        Row(
+            Modifier.fillMaxWidth().background(Color(0xFF1E293B)).padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically) {
+            verticalAlignment     = Alignment.CenterVertically
+        ) {
             Column {
                 Text("MASTER CONTROL", color = Color(0xFFF97318),
                     fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -329,27 +411,30 @@ fun ReportsPreview() {
                 Text("Logout", color = Color(0xFF64748B), fontSize = 13.sp)
             }
         }
-        LazyColumn(contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(
+            contentPadding      = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MiniStat("TOTAL", stats.total.toString(), Color(0xFF94A3B8), Modifier.weight(1f))
-                    MiniStat("IN REPAIR", stats.inRepair.toString(), Color(0xFFF97318), Modifier.weight(1f))
-                    MiniStat("DONE", stats.completed.toString(), Color(0xFF22C55E), Modifier.weight(1f))
-                    MiniStat("URGENT", stats.needsAttention.toString(), Color(0xFFEF4444), Modifier.weight(1f))
+                Row(Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MiniStat("TOTAL",     fStats.total.toString(),          Color(0xFF94A3B8), Modifier.weight(1f))
+                    MiniStat("IN REPAIR", fStats.inRepair.toString(),       Color(0xFFF97318), Modifier.weight(1f))
+                    MiniStat("DONE",      fStats.completed.toString(),      Color(0xFF22C55E), Modifier.weight(1f))
+                    MiniStat("URGENT",    fStats.needsAttention.toString(), Color(0xFFEF4444), Modifier.weight(1f))
                 }
             }
             item { SectionHeader("ACTIVE REPAIRS", "Trucks currently in service") }
             items(trucks) { truck ->
                 val tt = tasks.filter { it.truckId == truck.id }
-                val d = tt.count { it.status == "completed" }
+                val d  = tt.count { it.status == "completed" }
                 ActiveRepairCard(truck, d, tt.size, d == tt.size && tt.isNotEmpty())
             }
             item { SectionHeader("MECHANIC ACTIVITY", "Tasks completed by each mechanic") }
             items(users.filter { it.role == "mechanic" }) { mechanic ->
-                val mt = tasks.filter { it.mechanicId == mechanic.id }
-                MechanicActivityCard(mechanic, mt, trucks,
-                    mt.count { it.status == "completed" }, mt.size)
+                val mt   = tasks.filter { it.mechanicId == mechanic.id }
+                val done = mt.count { it.status == "completed" }
+                MechanicActivityCard(mechanic, mt, trucks, done, mt.size)
             }
         }
     }

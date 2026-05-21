@@ -1,5 +1,6 @@
 package com.example.vgarage
 
+
 import android.content.Intent
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -22,419 +23,486 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// Main Reports screen activity
+// Used to display reports
 class ReportsActivity : ComponentActivity() {
 
-    // Shared state so onResume can trigger a recompose-driven refresh
+    // Shared state variable
+    // Whenever this number changes, the screen refreshes/recomposes
     private val refreshTrigger = mutableIntStateOf(0)
 
+    // Runs when activity starts
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // it tells the Android system what to display.
         setContent {
+
+            // Open ReportsScreen composable
             ReportsScreen(
+
+                // Pass refresh trigger value
                 refreshTrigger = refreshTrigger.intValue,
+
+                // Back button closes current screen
                 onBack = { finish() },
+
+                // Logout function
                 onLogout = {
+
+                    // Clear logged-in user
                     CurrentUser.clear()
+
+                    // Open Login screen
                     val i = Intent(this, LoginActivity::class.java)
-                    i.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+
+                    // Clear old activities so user cannot go back
+                    i.flags =
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_CLEAR_TASK
+
+                    // Start login activity
                     startActivity(i)
                 }
             )
         }
     }
 
-    /** Refresh data every time admin returns to this screen */
+    // Runs every time user returns to this screen
     override fun onResume() {
         super.onResume()
+
+        // Increase trigger value
+        // This forces ReportsScreen to refresh data
         refreshTrigger.intValue++
     }
 }
 
 @Composable
 fun ReportsScreen(
-    refreshTrigger: Int       = 0,
-    onBack:         () -> Unit = {},
-    onLogout:       () -> Unit = {}
-) {
-    var trucks  by remember { mutableStateOf<List<Truck>>(emptyList()) }
-    var tasks   by remember { mutableStateOf<List<Task>>(emptyList()) }
-    var users   by remember { mutableStateOf<List<User>>(emptyList()) }
-    var stats   by remember { mutableStateOf(FleetStats(0, 0, 0, 0)) }
-    var loading by remember { mutableStateOf(true) }
 
-    // Re-fetches on every onResume (refreshTrigger change)
+    // Trigger for refreshing screen data
+    refreshTrigger: Int = 0,
+
+    // Back button function
+    onBack: () -> Unit = {},
+
+    // Logout button function
+    onLogout: () -> Unit = {}
+) {
+
+    // Store trucks list
+    var trucks by remember {
+        mutableStateOf<List<Truck>>(emptyList())
+    }
+
+    // Store tasks list
+    var tasks by remember {
+        mutableStateOf<List<Task>>(emptyList())
+    }
+
+    // Store users list
+    var users by remember {
+        mutableStateOf<List<User>>(emptyList())
+    }
+
+    // Store statistics
+    var stats by remember {
+        mutableStateOf(FleetStats(0, 0, 0, 0))
+    }
+
+    // Loading state
+    var loading by remember {
+        mutableStateOf(true)
+    }
+
+    // Runs whenever refreshTrigger changes
+    // Usually after onResume()
     LaunchedEffect(refreshTrigger) {
+
+        // Show loading spinner
         loading = true
-        // Fetch all data in a single pass
-        trucks  = GarageRepository.getAllTrucks()
-        tasks   = GarageRepository.getAllTasks()
-        users   = GarageRepository.getAllUsers()
-        // Compute stats from the data we just fetched (no extra DB round-trips)
+
+        // Get all trucks from repository/database
+        trucks = GarageRepository.getAllTrucks()
+
+        // Get all tasks
+        tasks = GarageRepository.getAllTasks()
+
+        // Get all users
+        users = GarageRepository.getAllUsers()
+
+        // Calculate fleet statistics
         stats = FleetStats(
+
+            // Total trucks
             total = trucks.size,
+
+            // Trucks with pending tasks
             inRepair = trucks.count { truck ->
-                tasks.filter { it.truckId == truck.id }.any { it.status == "pending" }
+
+                // Find tasks for this truck
+                tasks.filter {
+                    it.truckId == truck.id
+                }
+
+                    // Check if any task is still pending
+                    .any {
+                        it.status == "pending"
+                    }
             },
+
+            // Trucks with all tasks completed
             completed = trucks.count { truck ->
-                val tt = tasks.filter { it.truckId == truck.id }
-                tt.isNotEmpty() && tt.all { it.status == "completed" }
+
+                val tt = tasks.filter {// Find tasks for this truck
+                    it.truckId == truck.id
+                }
+
+                // Truck must have tasks
+                // and all tasks must be completed
+                tt.isNotEmpty() &&
+                        tt.all {
+                            it.status == "completed"
+                        }
             },
+
+            // Trucks needing attention
             needsAttention = trucks.count {
-                it.condition == "Poor" || it.condition == "Critical"
+
+                // Poor or Critical condition
+                it.condition == "Poor" ||
+                        it.condition == "Critical"
             }
         )
+
+        // Stop loading
         loading = false
     }
 
+    // Main screen container
     Column(
         Modifier
             .fillMaxSize()
+
+            // Dark background color
             .background(Color(0xFF0F172A))
+
+            // Avoid overlapping system bars
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        // ── Top bar ───────────────────────────────────────────────────────────
-        Row(
+
+        // ================= TOP BAR =================
+        Row(// Top bar container
             modifier = Modifier
                 .fillMaxWidth()
+
+                // Dark top bar background
                 .background(Color(0xFF1E293B))
+
                 .padding(horizontal = 8.dp, vertical = 4.dp),
+
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment     = Alignment.CenterVertically
+
+            verticalAlignment = Alignment.CenterVertically
         ) {
+
+            // Left side of top bar
             Row(verticalAlignment = Alignment.CenterVertically) {
+
+                // Back button
                 IconButton(onClick = onBack) {
+
                     TextButton(onClick = onBack) {
-                        Text("← Back", color = Color.White,
-                            fontSize = 14.sp, fontWeight = FontWeight.Medium)
+
+                        Text(
+                            "← Back",
+
+                            color = Color.White,
+
+                            fontSize = 14.sp,
+
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
+
+                // Titles
                 Column(Modifier.padding(start = 4.dp)) {
-                    Text("MASTER CONTROL",
-                        color = Color(0xFFF97318), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Text("Fleet Reports",
-                        color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-            TextButton(onClick = onLogout) {
-                Text("Logout", color = Color(0xFF64748B), fontSize = 13.sp)
-            }
-        }
 
-        if (loading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = Color(0xFFF97318))
-                    Spacer(Modifier.height(12.dp))
-                    Text("Loading reports...", color = Color(0xFF64748B), fontSize = 13.sp)
-                }
-            }
-            return@Column
-        }
-
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding      = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // ── Summary boxes ─────────────────────────────────────────────────
-            item {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    MiniStat("TOTAL",     stats.total.toString(),         Color(0xFF94A3B8), Modifier.weight(1f))
-                    MiniStat("IN REPAIR", stats.inRepair.toString(),      Color(0xFFF97318), Modifier.weight(1f))
-                    MiniStat("DONE",      stats.completed.toString(),     Color(0xFF22C55E), Modifier.weight(1f))
-                    MiniStat("URGENT",    stats.needsAttention.toString(), Color(0xFFEF4444), Modifier.weight(1f))
-                }
-                Spacer(Modifier.height(6.dp))
-            }
-
-            // ── Active repairs ────────────────────────────────────────────────
-            item {
-                SectionHeader("ACTIVE REPAIRS", "Trucks currently in service")
-            }
-
-            val inRepairTrucks = trucks.filter { truck ->
-                tasks.filter { it.truckId == truck.id }.any { it.status == "pending" }
-            }
-
-            if (inRepairTrucks.isEmpty()) {
-                item {
                     Text(
-                        "No trucks currently in repair",
-                        color    = Color(0xFF64748B),
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        "MASTER CONTROL",
+
+                        color = Color(0xFFF97318),
+
+                        fontSize = 11.sp,
+
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        "Fleet Reports",
+
+                        color = Color.White,
+
+                        fontSize = 16.sp,
+
+                        fontWeight = FontWeight.Bold
                     )
                 }
-            } else {
-                items(inRepairTrucks) { truck ->
-                    val truckTasks = tasks.filter { it.truckId == truck.id }
-                    val done   = truckTasks.count { it.status == "completed" }
-                    val total  = truckTasks.size
-                    val allDone = total > 0 && done == total
-                    ActiveRepairCard(truck, done, total, allDone)
-                }
             }
 
-            // ── Mechanic activity ─────────────────────────────────────────────
-            item {
-                Spacer(Modifier.height(6.dp))
-                SectionHeader("MECHANIC ACTIVITY", "Tasks completed by each mechanic")
+            // Logout button
+            TextButton(onClick = onLogout) {
+
+                Text(
+                    "Logout",
+
+                    color = Color(0xFF64748B),
+
+                    fontSize = 13.sp
+                )
             }
+        }
 
-            val mechanics = users.filter { it.role == "mechanic" }
+        // ================= LOADING SCREEN =================
+        if (loading) {
 
-            if (mechanics.isEmpty()) {
-                item {
+            // Center loading content
+            Box(
+                Modifier.fillMaxSize(),
+
+                contentAlignment = Alignment.Center
+            ) {
+
+                Column(
+                    horizontalAlignment =
+                        Alignment.CenterHorizontally
+                ) {
+
+                    // Loading spinner
+                    CircularProgressIndicator(
+                        color = Color(0xFFF97318)
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Loading text
                     Text(
-                        "No mechanic data available",
-                        color    = Color(0xFF64748B),
+                        "Loading reports...",
+
+                        color = Color(0xFF64748B),
+
                         fontSize = 13.sp
                     )
                 }
-            } else {
-                items(mechanics) { mechanic ->
-                    val myTasks = tasks.filter { it.mechanicId == mechanic.id }
-                    val done    = myTasks.count { it.status == "completed" }
-                    MechanicActivityCard(mechanic, myTasks, trucks, done, myTasks.size)
-                }
             }
 
-            item { Spacer(Modifier.height(16.dp)) }
+            // Stop drawing rest of UI while loading
+            return@Column
         }
-    }
-}
 
-@Composable
-fun MiniStat(label: String, value: String, color: Color, modifier: Modifier) {
-    Card(
-        modifier = modifier,
-        colors   = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-        shape    = RoundedCornerShape(8.dp)
-    ) {
-        Column(
-            Modifier.padding(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(value, color = color, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text(label,  color = Color(0xFF64748B), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-fun SectionHeader(title: String, subtitle: String) {
-    Column {
-        Text(title,    color = Color(0xFF94A3B8), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text(subtitle, color = Color(0xFF475569), fontSize = 12.sp)
-        Spacer(Modifier.height(8.dp))
-    }
-}
-
-@Composable
-fun ActiveRepairCard(truck: Truck, done: Int, total: Int, allDone: Boolean) {
-    val statusText  = if (allDone) "COMPLETED" else "IN REPAIR"
-    val statusColor = if (allDone) Color(0xFF22C55E) else Color(0xFFF97318)
-    val statusBg    = if (allDone) Color(0xFF0D2818) else Color(0xFF2A1400)
-    val progress    = if (total > 0) done.toFloat() / total else 0f
-
-    Card(
-        Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-        border = BorderStroke(1.dp, if (allDone) Color(0xFF22C55E) else Color(0xFF334155)),
-        shape  = RoundedCornerShape(8.dp)
-    ) {
-        Column(Modifier.padding(14.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment     = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(truck.plateNumber,
-                        color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                }
-                Box(
-                    Modifier
-                        .background(statusBg, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(statusText, color = statusColor,
-                        fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Text("${truck.kilometers} km  ·  Condition: ${truck.condition}",
-                color = Color(0xFF94A3B8), fontSize = 12.sp)
-            if (truck.repairs.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
-                Text("Repairs: ${truck.repairs}",
-                    color = Color(0xFF64748B), fontSize = 12.sp)
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("$done / $total tasks done",
-                    color = Color(0xFF64748B), fontSize = 11.sp)
-                Text("${(progress * 100).toInt()}%",
-                    color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.height(4.dp))
-            LinearProgressIndicator(
-                progress   = { progress },
-                modifier   = Modifier.fillMaxWidth().height(4.dp),
-                color      = statusColor,
-                trackColor = Color(0xFF334155)
-            )
-        }
-    }
-}
-
-@Composable
-fun MechanicActivityCard(
-    mechanic:  User,
-    myTasks:   List<Task>,
-    allTrucks: List<Truck>,
-    done:      Int,
-    total:     Int
-) {
-    val progress = if (total > 0) done.toFloat() / total else 0f
-    val allDone  = total > 0 && done == total
-    val completed = myTasks.filter { it.status == "completed" }
-
-    Card(
-        Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-        shape  = RoundedCornerShape(8.dp)
-    ) {
-        Column(Modifier.padding(14.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment     = Alignment.CenterVertically
-            ) {
-                Text(mechanic.name,
-                    color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("$done / $total tasks",
-                    color = Color(0xFF94A3B8), fontSize = 13.sp)
-            }
-            Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(
-                progress   = { progress },
-                modifier   = Modifier.fillMaxWidth().height(6.dp),
-                color      = if (allDone) Color(0xFF22C55E) else Color(0xFFF97318),
-                trackColor = Color(0xFF334155)
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                if (allDone) "All done ✓"
-                else "${(progress * 100).toInt()}% done  ·  ${total - done} remaining",
-                color    = if (allDone) Color(0xFF22C55E) else Color(0xFF64748B),
-                fontSize = 12.sp
-            )
-
-            // Completed task log
-            if (completed.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
-                HorizontalDivider(color = Color(0xFF334155))
-                Spacer(Modifier.height(8.dp))
-                Text("COMPLETED TASKS",
-                    color = Color(0xFF475569), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                completed.forEach { task ->
-                    val truck = allTrucks.find { it.id == task.truckId }
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Text("✓ ", color = Color(0xFF22C55E), fontSize = 13.sp)
-                        Column {
-                            Text(task.description,
-                                color = Color(0xFFCBD5E1), fontSize = 13.sp)
-                            if (truck != null) {
-                                Text("Truck: ${truck.plateNumber}",
-                                    color = Color(0xFF64748B), fontSize = 11.sp)
-                            }
-                            if (task.notes.isNotEmpty()) {
-                                Text("Notes: ${task.notes}",
-                                    color     = Color(0xFF64748B),
-                                    fontSize  = 11.sp,
-                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF0F172A)
-@Composable
-fun ReportsPreview() {
-    val trucks = listOf(
-        Truck("1", "N 12345 W", "Good",  45200,  "", "", "Engine/Oil Issues",   "Noise from engine"),
-        Truck("2", "N 98760 W", "Poor",  112000, "", "", "Body Dents or Scratches", ""),
-    )
-    val tasks = listOf(
-        Task("1", "1", "m1", "Engine/Oil Issues",       "completed", "Changed oil"),
-        Task("2", "1", "m1", "Brake Problems",           "completed", "Pads replaced"),
-        Task("3", "1", "m1", "Tire Tread/Sidewall Damage", "pending", ""),
-        Task("4", "2", "m2", "Body Dents or Scratches",  "completed", "Dents fixed"),
-        Task("5", "2", "m2", "Exterior Lighting Faults", "pending",   ""),
-    )
-    val users = listOf(
-        User("m1", "John Doe",   "john@vgarage.com",  "mechanic", "1111"),
-        User("m2", "Maria Doe",  "maria@vgarage.com", "mechanic", "2222")
-    )
-    val fStats = FleetStats(2, 2, 0, 1)
-
-    Column(Modifier.fillMaxSize().background(Color(0xFF0F172A))) {
-        Row(
-            Modifier.fillMaxWidth().background(Color(0xFF1E293B)).padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment     = Alignment.CenterVertically
-        ) {
-            Column {
-                Text("MASTER CONTROL", color = Color(0xFFF97318),
-                    fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Text("Fleet Reports", color = Color.White,
-                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
-            TextButton(onClick = {}) {
-                Text("Logout", color = Color(0xFF64748B), fontSize = 13.sp)
-            }
-        }
+        // ================= MAIN SCROLLABLE CONTENT =================
         LazyColumn(
-            contentPadding      = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+
+            Modifier.fillMaxSize(),
+
+            contentPadding = PaddingValues(16.dp),
+
+            verticalArrangement =
+                Arrangement.spacedBy(10.dp)
         ) {
+
+            // ================= SUMMARY BOXES =================
             item {
-                Row(Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MiniStat("TOTAL",     fStats.total.toString(),          Color(0xFF94A3B8), Modifier.weight(1f))
-                    MiniStat("IN REPAIR", fStats.inRepair.toString(),       Color(0xFFF97318), Modifier.weight(1f))
-                    MiniStat("DONE",      fStats.completed.toString(),      Color(0xFF22C55E), Modifier.weight(1f))
-                    MiniStat("URGENT",    fStats.needsAttention.toString(), Color(0xFFEF4444), Modifier.weight(1f))
+
+                Row(
+                    Modifier.fillMaxWidth(),
+
+                    horizontalArrangement =
+                        Arrangement.spacedBy(8.dp)
+                ) {
+
+                    // Total trucks stat
+                    MiniStat(
+                        "TOTAL",
+
+                        stats.total.toString(),
+
+                        Color(0xFF94A3B8),
+
+                        Modifier.weight(1f)
+                    )
+
+                    // Trucks in repair stat
+                    MiniStat(
+                        "IN REPAIR",
+
+                        stats.inRepair.toString(),
+
+                        Color(0xFFF97318),
+
+                        Modifier.weight(1f)
+                    )
+
+                    // Completed trucks stat
+                    MiniStat(
+                        "DONE",
+
+                        stats.completed.toString(),
+
+                        Color(0xFF22C55E),
+
+                        Modifier.weight(1f)
+                    )
+
+                    // Urgent trucks stat
+                    MiniStat(
+                        "URGENT",
+
+                        stats.needsAttention.toString(),
+
+                        Color(0xFFEF4444),
+
+                        Modifier.weight(1f)
+                    )
+                }
+
+                Spacer(Modifier.height(6.dp))
+            }
+
+            // ================= ACTIVE REPAIRS SECTION =================
+            item {
+
+                SectionHeader(
+                    "ACTIVE REPAIRS",
+
+                    "Trucks currently in service"
+                )
+            }
+
+            // Get trucks with pending tasks
+            val inRepairTrucks = trucks.filter { truck ->
+
+                tasks.filter {
+                    it.truckId == truck.id
+                }
+
+                    .any {
+                        it.status == "pending"
+                    }
+            }
+
+            // If no trucks are being repaired
+            if (inRepairTrucks.isEmpty()) {
+
+                item {
+
+                    Text(
+                        "No trucks currently in repair",
+
+                        color = Color(0xFF64748B),
+
+                        fontSize = 13.sp,
+
+                        modifier =
+                            Modifier.padding(vertical = 8.dp)
+                    )
+                }
+
+            } else {
+
+                // Display each repair card
+                items(inRepairTrucks) { truck ->
+
+                    // Get tasks for this truck
+                    val truckTasks = tasks.filter {
+                        it.truckId == truck.id
+                    }
+
+                    // Count completed tasks
+                    val done = truckTasks.count {
+                        it.status == "completed"
+                    }
+
+                    // Total tasks
+                    val total = truckTasks.size
+
+                    // Check if all tasks completed
+                    val allDone =
+                        total > 0 && done == total
+
+                    // Show repair card
+                    ActiveRepairCard(
+                        truck,
+                        done,
+                        total,
+                        allDone
+                    )
                 }
             }
-            item { SectionHeader("ACTIVE REPAIRS", "Trucks currently in service") }
-            items(trucks) { truck ->
-                val tt = tasks.filter { it.truckId == truck.id }
-                val d  = tt.count { it.status == "completed" }
-                ActiveRepairCard(truck, d, tt.size, d == tt.size && tt.isNotEmpty())
+
+            // ================= MECHANIC ACTIVITY SECTION =================
+            item {
+
+                Spacer(Modifier.height(6.dp))
+
+                SectionHeader(
+                    "MECHANIC ACTIVITY",
+
+                    "Tasks completed by each mechanic"
+                )
             }
-            item { SectionHeader("MECHANIC ACTIVITY", "Tasks completed by each mechanic") }
-            items(users.filter { it.role == "mechanic" }) { mechanic ->
-                val mt   = tasks.filter { it.mechanicId == mechanic.id }
-                val done = mt.count { it.status == "completed" }
-                MechanicActivityCard(mechanic, mt, trucks, done, mt.size)
+
+            // Get only mechanics
+            val mechanics = users.filter {
+                it.role == "mechanic"
+            }
+
+            // If no mechanics found
+            if (mechanics.isEmpty()) {
+
+                item {
+
+                    Text(
+                        "No mechanic data available",
+
+                        color = Color(0xFF64748B),
+
+                        fontSize = 13.sp
+                    )
+                }
+
+            } else {
+
+                // Display mechanic activity cards
+                items(mechanics) { mechanic ->
+
+                    // Tasks assigned to this mechanic
+                    val myTasks = tasks.filter {
+                        it.mechanicId == mechanic.id
+                    }
+
+                    // Completed tasks count
+                    val done = myTasks.count {
+                        it.status == "completed"
+                    }
+
+                    // Show mechanic card
+                    MechanicActivityCard(
+                        mechanic,
+                        myTasks,
+                        trucks,
+                        done,
+                        myTasks.size
+                    )
+                }
+            }
+
+            // Bottom spacing
+            item {
+                Spacer(Modifier.height(16.dp))
             }
         }
     }

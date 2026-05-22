@@ -1,0 +1,284 @@
+# 🔧 Valentine's Garage — Vehicle Management System
+
+> **MAP711S Mobile Application Development — NUST**  
+> A collaborative truck check-in and repair tracking application built for Android using Jetpack Compose and Supabase.
+
+---
+
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Database Schema](#database-schema)
+- [Getting Started](#getting-started)
+- [App Navigation](#app-navigation)
+- [User Roles](#user-roles)
+- [Architecture](#architecture)
+- [Key Classes](#key-classes)
+
+---
+
+## Overview
+
+Valentine's Garage is an Android app that digitises the vehicle intake and repair workflow at a garage. Mechanics can check trucks in, record their condition and kilometres, and collaboratively tick off repair tasks — preventing work from going undone because one mechanic assumed another had handled it. The admin (Valentine) can view a live report of fleet status and mechanic activity.
+
+---
+
+## Features
+
+| Feature | Description |
+|---|---|
+| **Vehicle Check-In** | Record plate number, odometer reading, condition, and select repairs needed |
+| **Repair Tasks** | Each selected repair at check-in becomes an individual task for mechanics to tick off |
+| **Collaborative Tasks** | Any mechanic can open any in-service truck and mark tasks done with notes |
+| **Fleet Dashboard** | Live counts of trucks in repair, completed, and needing urgent attention |
+| **Trucks In Service Screen** | Dedicated screen listing all active trucks with progress bars — tap to open tasks |
+| **Admin Reports** | Full fleet statistics, per-truck repair progress, and per-mechanic activity breakdown |
+| **Role-Based Routing** | Admins go to Reports; mechanics go to Dashboard on login |
+| **Duplicate Plate Guard** | If a plate is already in service, prompts mechanic to open existing tasks or create a new entry |
+| **Auto-Refresh** | Dashboard and Reports refresh automatically every time the screen is revisited |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Language | Kotlin |
+| UI Framework | Jetpack Compose (Material 3) |
+| Database | Supabase (PostgreSQL) |
+| DB Client | `io.github.jan-tennert.supabase:postgrest-kt` v2.6.0 |
+| Serialisation | `kotlinx.serialization` |
+| Async | Kotlin Coroutines |
+| Min SDK | Android 8.0 (API 26) |
+| Target SDK | Android 15 (API 35) |
+
+---
+
+## Project Structure
+
+```
+app/src/main/java/com/example/vgarage/
+│
+├── SupabaseClient.kt          # Singleton Supabase connection
+├── GarageRepository.kt        # All database operations + data classes
+│
+├── LoginActivity.kt           # Login screen — entry point
+├── DashboardActivity.kt       # Mechanic home screen (fleet stats)
+├── CheckInActivity.kt         # Vehicle intake form
+├── TasksActivity.kt           # Per-truck collaborative task list
+├── TrucksInServiceActivity.kt # All active trucks with task progress
+├── ReportsActivity.kt         # Admin analytics screen
+│
+└── ui/theme/
+    ├── Color.kt
+    ├── Type.kt
+    └── Theme.kt
+```
+
+---
+
+## Database Schema
+
+The app uses three tables hosted on **Supabase**:
+
+### `Users`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | Primary key |
+| name | text | Full name |
+| email | text | Login username |
+| role | text | `mechanic` or `admin` |
+| pin | text | Numeric PIN password |
+| created_at | timestamp | Auto-set by Supabase |
+
+### `trucks`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | App-generated UUID |
+| plate_number | text | Vehicle registration |
+| condition | text | `Good` / `Fair` / `Poor` / `Critical` |
+| kilometers | int4 | Odometer at check-in |
+| check_in_date | timestamp | Auto or null |
+| checked_by | uuid | FK → Users.id |
+| repairs | text | Comma-joined selected repairs |
+| additional_notes | text | Free-text observations |
+| owner_name | text | Optional |
+| status | text | Optional |
+
+### `tasks`
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | App-generated UUID |
+| truck_id | uuid | FK → trucks.id |
+| mechanic_id | uuid | FK → Users.id |
+| task_description | text | Repair item name |
+| status | text | `pending` (default) or `completed` |
+| notes | text | Mechanic's notes after completion |
+| created_at | timestamp | Auto-set |
+| completed_at | timestamp | Reserved for future use |
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Android Studio Hedgehog or newer
+- Android device or emulator running API 26+
+- Internet connection (Supabase is cloud-hosted)
+
+### Setup
+
+1. **Clone or unzip** the project and open it in Android Studio.
+
+2. The Supabase connection is already configured in `SupabaseClient.kt` — no additional setup needed for the existing database.
+
+3. **Build and run** on your device or emulator.
+
+```bash
+# Or build from the command line
+./gradlew assembleDebug
+```
+
+### Adding Users to the Database
+
+Users must be inserted directly into Supabase (there is no registration screen by design). Go to your Supabase project → Table Editor → `Users` and insert rows with:
+
+```
+name:  John Doe
+email: john@vgarage.com
+role:  mechanic        ← or "admin"
+pin:   1234
+```
+
+---
+
+## App Navigation
+
+```
+LoginActivity
+    │
+    ├── role == "admin"   ──► ReportsActivity
+    │
+    └── role == "mechanic" ──► DashboardActivity
+                                    │
+                                    ├── + NEW CHECK-IN ──► CheckInActivity
+                                    │                           │
+                                    │                           └── on submit ──► TasksActivity
+                                    │
+                                    └── VIEW TRUCKS IN SERVICE ──► TrucksInServiceActivity
+                                                                        │
+                                                                        └── tap truck ──► TasksActivity
+```
+
+---
+
+## User Roles
+
+### Mechanic
+- Logs in → **Dashboard** showing fleet stats
+- Taps **+ NEW CHECK-IN** to intake a vehicle:
+  - Enter plate, kilometres, condition
+  - Tick which repairs are needed (each becomes a task)
+  - Add any extra notes
+- Taps **VIEW TRUCKS IN SERVICE** to see all active trucks
+- Opens any truck to view and tick off its task list
+- Adds notes when marking a task as done
+
+### Admin (Valentine)
+- Logs in → **Reports** screen directly
+- Sees four summary stats: Total, In Repair, Done, Urgent
+- Scrolls to see each truck's repair progress
+- Scrolls further to see each mechanic's completed tasks with their notes
+
+---
+
+## Architecture
+
+The app follows a **Repository Pattern** with a single data layer:
+
+```
+┌─────────────────────────────────┐
+│         UI Layer                │
+│  (Activities + @Composables)    │
+│  State: mutableStateOf          │
+│  Async: LaunchedEffect /        │
+│         rememberCoroutineScope  │
+└────────────┬────────────────────┘
+             │ suspend fun calls
+┌────────────▼────────────────────┐
+│      Repository Layer           │
+│      GarageRepository (object)  │
+│  - Single source of DB truth    │
+│  - All try/catch handling       │
+│  - Returns data classes         │
+└────────────┬────────────────────┘
+             │ Supabase Kotlin client
+┌────────────▼────────────────────┐
+│        Data Layer               │
+│   Supabase / PostgreSQL         │
+│   (cloud-hosted, HTTPS)         │
+└─────────────────────────────────┘
+```
+
+### Refresh Pattern
+
+Both `DashboardActivity` and `ReportsActivity` use an `onResume`-driven refresh:
+
+```kotlin
+private val refreshTrigger = mutableIntStateOf(0)
+
+override fun onResume() {
+    super.onResume()
+    refreshTrigger.intValue++   // triggers LaunchedEffect to re-fetch
+}
+```
+
+This ensures data is always current when navigating back to a screen.
+
+---
+
+## Key Classes
+
+### `GarageRepository`
+The only class that talks to the database. All Activities call this.
+
+| Function | Purpose |
+|---|---|
+| `login(email, pin)` | Authenticate a user by email + PIN |
+| `checkInTruck(...)` | Insert truck row + one task row per selected repair |
+| `getActiveTruckByPlate(plate)` | Find an already-active truck to prevent duplicates |
+| `getTasksForTruck(truckId)` | Load all tasks for a specific truck |
+| `completeTask(taskId, notes)` | Mark a task done and save mechanic's notes |
+| `getAllTrucks()` | Fetch all trucks (used for stats) |
+| `getAllTasks()` | Fetch all tasks (used for stats) |
+| `getAllUsers()` | Fetch all users (used for mechanic reports) |
+| `getFleetStats()` | Compute FleetStats from trucks + tasks |
+
+### `CurrentUser`
+A Kotlin `object` (singleton) acting as the session store. Holds `id`, `name`, `role` after login. Cleared on logout. Tracks last activity for a 5-minute auto-logout.
+
+### Data Classes
+- `User` — maps to the `Users` table
+- `Truck` — maps to the `trucks` table (nullable fields match DB nulls)
+- `Task` — maps to the `tasks` table
+- `FleetStats` — in-memory computed stats (not stored in DB)
+
+---
+
+## Assessment Rubric Reference (MAP711S)
+
+| Criteria | Implementation |
+|---|---|
+| **App Architecture** | Repository pattern, singleton DB client, layered separation of UI and data |
+| **Code** | Documented suspend functions, try/catch on all DB calls, meaningful naming |
+| **Functionality** | Check-in, task ticking, role routing, reports, duplicate guard, auto-refresh |
+| **UI & Navigation** | Jetpack Compose Material 3, consistent dark theme, progress indicators, role-based screens |
+| **Presentation** | See the accompanying Technical Architecture & Developer Guide PDF |
+
+---
+
+*Valentine's Garage — MAP711S Assignment | NUST Faculty of Computing and Informatics*
